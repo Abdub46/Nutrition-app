@@ -1,31 +1,60 @@
-const jwt = require("jsonwebtoken");
+"use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import axios from "axios";
 
-exports.login = async (req, res) => {
-  const { email, password } = req.body;
+export default function LoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
-  // Validate user (your existing logic)
-  const user = await User.findOne({ where: { email } });
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
 
-  if (!user || user.password !== password) {
-    return res.status(401).json({ message: "Invalid credentials" });
-  }
+    try {
+      const res = await axios.post(
+        "http://localhost:5000/api/auth/login",
+        { email, password },
+        { withCredentials: true } // critical for cookie
+      );
 
-  const token = jwt.sign(
-    {
-      id: user.id,
-      name: user.name,
-      role: user.role,
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" }
+      console.log(res.data); // should show { message: "Login successful" }
+      router.push("/dashboard"); // redirect after login
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Login failed");
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: "400px", margin: "50px auto" }}>
+      <h1>Login</h1>
+      <form onSubmit={handleSubmit}>
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          style={{ width: "100%", padding: "8px", marginBottom: "12px" }}
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          style={{ width: "100%", padding: "8px", marginBottom: "12px" }}
+        />
+        <button type="submit" style={{ width: "100%", padding: "10px" }}>
+          Login
+        </button>
+      </form>
+      {error && <p style={{ color: "red" }}>{error}</p>}
+    </div>
   );
+}
 
-  res.cookie("token", token, {
-    httpOnly: true,
-    secure: false, // true in production (HTTPS)
-    sameSite: "lax",
-    maxAge: 24 * 60 * 60 * 1000,
-  });
 
-  res.json({ message: "Login successful" });
-};

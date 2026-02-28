@@ -30,21 +30,21 @@ export default function Dashboard() {
   const [bmiRecords, setBmiRecords] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 🔐 Fetch data using cookies
   useEffect(() => {
     const fetchHistory = async () => {
       try {
         const res = await axios.get(
           "http://localhost:5000/api/health/history",
-          {
-            withCredentials: true, // ✅ sends HTTP-only cookie
-          }
+          { withCredentials: true }
         );
 
         setBmiRecords(res.data.records || []);
       } catch (error) {
-        console.error("Unauthorized. Redirecting...");
-        router.replace("/login");
+        if (error.response?.status === 401) {
+          router.replace("/login");
+        } else {
+          console.error("Error fetching history:", error);
+        }
       } finally {
         setLoading(false);
       }
@@ -53,12 +53,18 @@ export default function Dashboard() {
     fetchHistory();
   }, [router]);
 
-  // 🔓 Logout (server clears cookie)
   const handleLogout = async () => {
     try {
       await axios.post(
         "http://localhost:5000/api/auth/logout",
-        {},
+        {
+          bmi: bmi.toFixed(2),
+          category,
+          idealWeight: idealWeight.toFixed(1),
+          dailyCalories: Math.round(calories),
+          advice,
+
+        },
         { withCredentials: true }
       );
     } catch (error) {
@@ -75,8 +81,8 @@ export default function Dashboard() {
     new Date(r.createdAt).toLocaleDateString()
   );
 
-  const bmiData = bmiRecords.map((r) => r.bmi);
-  const caloriesData = bmiRecords.map((r) => r.dailyCalories);
+  const bmiData = bmiRecords.map((r) => r.bmi || 0);
+  const caloriesData = bmiRecords.map((r) => r.dailyCalories || 0);
 
   return (
     <div
@@ -110,53 +116,107 @@ export default function Dashboard() {
         </button>
       </div>
 
+
+
       {/* BMI CHART */}
       <div style={{ marginTop: "40px" }}>
         <h2>BMI Over Time</h2>
-        <Line
-          data={{
-            labels,
-            datasets: [
-              {
-                label: "BMI",
-                data: bmiData,
-                borderColor: "rgba(75, 192, 192, 1)",
-                backgroundColor: "rgba(75, 192, 192, 0.2)",
-                tension: 0.3,
-              },
-            ],
-          }}
-        />
-      </div>
+              <Line
+              data={{
+                labels,
+                datasets: [{
+                  label: "BMI (kg/m²)",
+                  data: bmiData,
+                  tension: 0.3,
+                }],
+              }}
+              options={{
+                scales: {
+                  y: {
+                    title: {
+                      display: true,
+                      text: "BMI (kg/m²)",
+                    },
+                  },
+                  x: {
+                    title: {
+                      display: true,
+                      text: "Months",
+                    },
+                  },
+                },
+              }}
+            />
+            </div>
+
+
 
       {/* CALORIES CHART */}
       <div style={{ marginTop: "40px" }}>
         <h2>Daily Calories Over Time</h2>
-        <Line
-          data={{
-            labels,
-            datasets: [
-              {
-                label: "Calories",
-                data: caloriesData,
-                borderColor: "rgba(255, 99, 132, 1)",
-                backgroundColor: "rgba(255, 99, 132, 0.2)",
-                tension: 0.3,
-              },
-            ],
-          }}
-        />
-      </div>
+
+              <Line
+                data={{
+                  labels,
+                  datasets: [{
+                    label: "Calories (kcals)",
+                    data: caloriesData,
+                    tension: 0.3,
+                  }],
+                }}
+                options={{
+                  scales: {
+                    y: {
+                      title: {
+                        display: true,
+                        text: "Calories (kcals)",
+                      },
+                    },
+                    x: {
+                      title: {
+                        display: true,
+                        text: "Months",
+                      },
+                    },
+                  },
+                }}
+              />
+            </div>
 
       {/* ADVICE SECTION */}
-      <div style={{ marginTop: "40px" }}>
-        <h2>Dietary Advice History</h2>
+          <div style={{ marginTop: "40px" }}>
+            <h2>Dietary Counselling & Advice</h2>
+
+            <p>
+              ✔ Maintain a balanced diet including carbohydrates,
+              proteins, fats, vitamins, and minerals.
+            </p>
+
+            <p>
+              ✔ Increase fruit and vegetable intake to at least
+              5 servings per day.
+            </p>
+
+            <p>
+              ✔ Limit processed foods and sugary beverages.
+            </p>
+
+            <p>
+              ✔ Stay hydrated — aim for 2–3 liters of water daily.
+            </p>
+
+            <p>
+              ✔ Combine proper nutrition with regular physical activity.
+            </p>
+          
+
+
         {bmiRecords.length === 0 ? (
           <p>No records found.</p>
         ) : (
-          bmiRecords.map((r, i) => (
+          bmiRecords.map((record, index) => (
             <div
-              key={i}
+              key={index}
               style={{
                 padding: "12px",
                 border: "1px solid #ddd",
@@ -166,10 +226,10 @@ export default function Dashboard() {
               }}
             >
               <strong>
-                {new Date(r.createdAt).toLocaleDateString()}:
+                {new Date(record.createdAt).toLocaleDateString()}
               </strong>
-              <p style={{ marginTop: "5px" }}>
-                {r.advice || "No advice available"}
+              <p style={{ marginTop: "6px" }}>
+                {record.advice || "No advice available"}
               </p>
             </div>
           ))
