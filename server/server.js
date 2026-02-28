@@ -1,7 +1,10 @@
 // ================== IMPORTS ==================
-const express = require("express");
-const cors = require("cors");
 const dotenv = require("dotenv");
+const express = require("express");
+
+const cors = require("cors");
+
+
 const helmet = require("helmet");
 const morgan = require("morgan");
 const cookieParser = require("cookie-parser");
@@ -26,7 +29,13 @@ const healthRoutes = require("./routes/healthRoutes");
 const app = express();
 
 // ================== MIDDLEWARES ==================
-app.use(cors());
+
+app.use(cors({
+   origin: "http://localhost:3000", // frontend URL
+  credentials: true,              // allow cookies
+
+}));
+
 app.use(helmet());
 app.use(morgan("dev"));
 app.use(express.json()); // JSON body parser

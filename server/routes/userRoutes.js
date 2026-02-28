@@ -2,11 +2,11 @@ const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware");
 
-// Protected route
-router.get("/profile", authMiddleware, (req, res) => {
-  res.json({
-    message: "Welcome to your profile",
-    user: req.user
+// Protected route to get current user info
+router.get("/me", authMiddleware, (req, res) => {
+  res.status(200).json({
+    message: "User profile fetched successfully",
+    user: req.user, // Set by authMiddleware
   });
 });
 
