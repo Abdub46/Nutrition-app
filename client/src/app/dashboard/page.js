@@ -3,13 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import { Line } from "react-chartjs-2";
+import { Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
-  PointElement,
-  LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend,
@@ -18,8 +17,7 @@ import {
 ChartJS.register(
   CategoryScale,
   LinearScale,
-  PointElement,
-  LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend
@@ -27,44 +25,37 @@ ChartJS.register(
 
 export default function Dashboard() {
   const router = useRouter();
-  const [bmiRecords, setBmiRecords] = useState([]);
+  const [monthlyData, setMonthlyData] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchHistory = async () => {
+    const fetchMonthlyData = async () => {
       try {
         const res = await axios.get(
-          "http://localhost:5000/api/health/history",
+          "http://localhost:5000/api/health/monthly",
           { withCredentials: true }
         );
 
-        setBmiRecords(res.data.records || []);
+        setMonthlyData(res.data || []);
       } catch (error) {
         if (error.response?.status === 401) {
           router.replace("/login");
         } else {
-          console.error("Error fetching history:", error);
+          console.error("Error fetching monthly data:", error);
         }
       } finally {
         setLoading(false);
       }
     };
 
-    fetchHistory();
+    fetchMonthlyData();
   }, [router]);
 
   const handleLogout = async () => {
     try {
       await axios.post(
         "http://localhost:5000/api/auth/logout",
-        {
-          bmi: bmi.toFixed(2),
-          category,
-          idealWeight: idealWeight.toFixed(1),
-          dailyCalories: Math.round(calories),
-          advice,
-
-        },
+        {},
         { withCredentials: true }
       );
     } catch (error) {
@@ -77,12 +68,19 @@ export default function Dashboard() {
   if (loading)
     return <p style={{ textAlign: "center" }}>Loading dashboard...</p>;
 
-  const labels = bmiRecords.map((r) =>
-    new Date(r.createdAt).toLocaleDateString()
+  /* =============================
+     PREPARE CHART DATA
+  ============================== */
+
+  const labels = monthlyData.map((r) =>
+    new Date(r.month).toLocaleString("default", {
+      month: "short",
+      year: "numeric",
+    })
   );
 
-  const bmiData = bmiRecords.map((r) => r.bmi || 0);
-  const caloriesData = bmiRecords.map((r) => r.dailyCalories || 0);
+  const bmiValues = monthlyData.map((r) => Number(r.avgBMI));
+  const calorieValues = monthlyData.map((r) => Number(r.avgCalories));
 
   return (
     <div
@@ -101,6 +99,7 @@ export default function Dashboard() {
         }}
       >
         <h1>Horizon Dashboard</h1>
+
         <button
           onClick={handleLogout}
           style={{
@@ -116,124 +115,92 @@ export default function Dashboard() {
         </button>
       </div>
 
-
-
-      {/* BMI CHART */}
+      {/* ================= BMI BAR CHART ================= */}
       <div style={{ marginTop: "40px" }}>
-        <h2>BMI Over Time</h2>
-              <Line
-              data={{
-                labels,
-                datasets: [{
-                  label: "BMI (kg/m²)",
-                  data: bmiData,
-                  tension: 0.3,
-                }],
-              }}
-              options={{
-                scales: {
-                  y: {
-                    title: {
-                      display: true,
-                      text: "BMI (kg/m²)",
-                    },
-                  },
-                  x: {
-                    title: {
-                      display: true,
-                      text: "Months",
-                    },
-                  },
+        <h2>Average Monthly BMI</h2>
+
+        <Bar
+          data={{
+            labels,
+            datasets: [
+              {
+                label: "BMI (kg/m²)",
+                data: bmiValues,
+              },
+            ],
+          }}
+          options={{
+            responsive: true,
+            plugins: {
+              legend: { position: "top" },
+              title: { display: false },
+            },
+            scales: {
+              y: {
+                title: {
+                  display: true,
+                  text: "BMI (kg/m²)",
                 },
-              }}
-            />
-            </div>
+              },
+              x: {
+                title: {
+                  display: true,
+                  text: "Month",
+                },
+              },
+            },
+          }}
+        />
+      </div>
 
-
-
-      {/* CALORIES CHART */}
+      {/* ================= CALORIES BAR CHART ================= */}
       <div style={{ marginTop: "40px" }}>
-        <h2>Daily Calories Over Time</h2>
+        <h2>Average Monthly Daily Calories</h2>
 
-              <Line
-                data={{
-                  labels,
-                  datasets: [{
-                    label: "Calories (kcals)",
-                    data: caloriesData,
-                    tension: 0.3,
-                  }],
-                }}
-                options={{
-                  scales: {
-                    y: {
-                      title: {
-                        display: true,
-                        text: "Calories (kcals)",
-                      },
-                    },
-                    x: {
-                      title: {
-                        display: true,
-                        text: "Months",
-                      },
-                    },
-                  },
-                }}
-              />
-            </div>
+        <Bar
+          data={{
+            labels,
+            datasets: [
+              {
+                label: "Calories (kcals)",
+                data: calorieValues,
+              },
+            ],
+          }}
+          options={{
+            responsive: true,
+            plugins: {
+              legend: { position: "top" },
+            },
+            scales: {
+              y: {
+                title: {
+                  display: true,
+                  text: "Calories (kcals)",
+                },
+              },
+              x: {
+                title: {
+                  display: true,
+                  text: "Month",
+                },
+              },
+            },
+          }}
+        />
+      </div>
 
-      {/* ADVICE SECTION */}
-          <div style={{ marginTop: "40px" }}>
-            <h2>Dietary Counselling & Advice</h2>
+      {/* ================= GENERAL ADVICE ================= */}
+      <div style={{ marginTop: "40px" }}>
+        <h2>General Dietary Counselling</h2>
 
-            <p>
-              ✔ Maintain a balanced diet including carbohydrates,
-              proteins, fats, vitamins, and minerals.
-            </p>
+        <p>✔ Maintain a balanced diet.</p>
+        <p>✔ Eat at least 5 servings of fruits and vegetables daily.</p>
+        <p>✔ Reduce sugary drinks and processed foods.</p>
+        <p>✔ Drink 2–3 liters of water daily.</p>
+        <p>✔ Combine good nutrition with regular physical activity.</p>
 
-            <p>
-              ✔ Increase fruit and vegetable intake to at least
-              5 servings per day.
-            </p>
-
-            <p>
-              ✔ Limit processed foods and sugary beverages.
-            </p>
-
-            <p>
-              ✔ Stay hydrated — aim for 2–3 liters of water daily.
-            </p>
-
-            <p>
-              ✔ Combine proper nutrition with regular physical activity.
-            </p>
-          
-
-
-        {bmiRecords.length === 0 ? (
-          <p>No records found.</p>
-        ) : (
-          bmiRecords.map((record, index) => (
-            <div
-              key={index}
-              style={{
-                padding: "12px",
-                border: "1px solid #ddd",
-                marginBottom: "12px",
-                borderRadius: "8px",
-                background: "#f9f9f9",
-              }}
-            >
-              <strong>
-                {new Date(record.createdAt).toLocaleDateString()}
-              </strong>
-              <p style={{ marginTop: "6px" }}>
-                {record.advice || "No advice available"}
-              </p>
-            </div>
-          ))
-        )}
+        {monthlyData.length === 0 && <p>No records found.</p>}
       </div>
     </div>
   );
