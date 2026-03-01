@@ -16,8 +16,11 @@ const User = sequelize.define("User", {
   height: { type: DataTypes.FLOAT },
   weight: { type: DataTypes.FLOAT },
   lifestyle: { type: DataTypes.STRING },
-}, {
-  timestamps: true,
+}, 
+{
+  tableName: "Users",
+  timestamps: true
+  
 });
 
 module.exports = User;

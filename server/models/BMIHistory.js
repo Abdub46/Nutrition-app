@@ -23,3 +23,6 @@ const BMIHistory = sequelize.define(
 // Associations (note the quotes)
 BMIHistory.belongsTo(User, { foreignKey: "userId", targetKey: "id", onDelete: "CASCADE" });
 User.hasMany(BMIHistory, { foreignKey: "userId", sourceKey: "id", onDelete: "CASCADE" });
+
+module.exports = BMIHistory;
+

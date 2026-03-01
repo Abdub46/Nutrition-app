@@ -1,6 +1,9 @@
 const BMIHistory = require("../models/BMIHistory");
-const { Sequelize } = require("sequelize");
+const Sequelize = require("sequelize");
 
+/* ======================================================
+   CALCULATE & SAVE BMI
+====================================================== */
 exports.calculateAndSaveBMI = async (req, res) => {
   try {
     if (!req.user || !req.user.id) {
@@ -13,32 +16,34 @@ exports.calculateAndSaveBMI = async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const heightInMeters = height / 100;
+    const heightInMeters = Number(height) / 100;
+    const weightNum = Number(weight);
+    const ageNum = Number(age);
 
-    // BMI
-    const bmi = weight / (heightInMeters * heightInMeters);
+    /* ---------- BMI ---------- */
+    const bmi = weightNum / (heightInMeters * heightInMeters);
 
-    let category = "";
+    let category;
     if (bmi < 18.5) category = "Underweight";
     else if (bmi < 25) category = "Normal weight";
     else if (bmi < 30) category = "Overweight";
     else category = "Obese";
 
-    // BMR
+    /* ---------- BMR ---------- */
     let bmr;
     if (gender.toLowerCase() === "male") {
-      bmr = 66.5 + 13.7 * weight + 5 * height - 6.8 * age;
+      bmr = 66.5 + 13.7 * weightNum + 5 * Number(height) - 6.8 * ageNum;
     } else {
-      bmr = 665 + 9.6 * weight + 1.8 * height - 4.7 * age;
+      bmr = 665 + 9.6 * weightNum + 1.8 * Number(height) - 4.7 * ageNum;
     }
 
-    // Activity multiplier
+    /* ---------- Activity Multiplier ---------- */
     const activityMap = {
       sedentary: 1.2,
       light: 1.375,
       moderate: 1.55,
       active: 1.725,
-      very_active: 1.9
+      very_active: 1.9,
     };
 
     const multiplier = activityMap[activityLevel.toLowerCase()];
@@ -48,30 +53,34 @@ exports.calculateAndSaveBMI = async (req, res) => {
 
     const dailyCalories = bmr * multiplier * 1.1;
 
-    // Ideal Body Weight (only if not normal)
+    /* ---------- Ideal Body Weight ---------- */
     let idealBodyWeight = null;
     if (category !== "Normal weight") {
       idealBodyWeight = 21.65 * (heightInMeters * heightInMeters);
     }
 
-    // Advice
-    let advice = "";
+    /* ---------- Advice ---------- */
+    let advice;
     switch (category) {
       case "Underweight":
-        advice = "Increase calorie intake with protein-rich and healthy fats. Consider small frequent meals.";
+        advice =
+          "Increase calorie intake with protein-rich foods and healthy fats. Eat small frequent meals.";
         break;
       case "Normal weight":
-        advice = "Maintain current habits. Balanced diet and regular activity recommended.";
+        advice =
+          "Maintain balanced diet and regular physical activity.";
         break;
       case "Overweight":
-        advice = "Reduce calories moderately. Increase physical activity and control portions.";
+        advice =
+          "Reduce calorie intake moderately and increase physical activity.";
         break;
       case "Obese":
-        advice = "Structured weight loss plan recommended. Focus on vegetables, lean protein and daily exercise.";
+        advice =
+          "Adopt structured weight-loss plan. Focus on vegetables, lean proteins and daily exercise.";
         break;
     }
 
-    // Save to PostgreSQL
+    /* ---------- Save to DB ---------- */
     const bmiRecord = await BMIHistory.create({
       userId: req.user.id,
       bmi: parseFloat(bmi.toFixed(2)),
@@ -81,13 +90,13 @@ exports.calculateAndSaveBMI = async (req, res) => {
       idealBodyWeight: idealBodyWeight
         ? parseFloat(idealBodyWeight.toFixed(2))
         : null,
-      advice
+      advice,
     });
 
     res.status(201).json({
       success: true,
       message: "BMI record saved successfully",
-      record: bmiRecord
+      record: bmiRecord,
     });
 
   } catch (error) {
@@ -96,10 +105,15 @@ exports.calculateAndSaveBMI = async (req, res) => {
   }
 };
 
-
-//History fetch
+/* ======================================================
+   GET FULL HISTORY
+====================================================== */
 exports.getHistory = async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const records = await BMIHistory.findAll({
       where: { userId: req.user.id },
       order: [["createdAt", "ASC"]],
@@ -113,39 +127,50 @@ exports.getHistory = async (req, res) => {
   }
 };
 
-
-//Monthly aggregation
+/* ======================================================
+   GET MONTHLY AGGREGATED HISTORY
+====================================================== */
 exports.getMonthlyHistory = async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const records = await BMIHistory.findAll({
       attributes: [
         [
           Sequelize.fn(
-            "TO_CHAR",
-            Sequelize.col("createdAt"),
-            "YYYY-Mon"
+            "DATE_TRUNC",
+            "month",
+            Sequelize.col("createdAt")
           ),
-          "month"
+          "month",
         ],
-        [
-          Sequelize.fn("AVG", Sequelize.col("bmi")),
-          "avgBMI"
-        ],
+        [Sequelize.fn("AVG", Sequelize.col("bmi")), "avgBMI"],
         [
           Sequelize.fn("AVG", Sequelize.col("dailyCalories")),
-          "avgCalories"
-        ]
+          "avgCalories",
+        ],
       ],
       where: { userId: req.user.id },
       group: [
         Sequelize.fn(
-          "TO_CHAR",
-          Sequelize.col("createdAt"),
-          "YYYY-Mon"
-        )
+          "DATE_TRUNC",
+          "month",
+          Sequelize.col("createdAt")
+        ),
       ],
-      order: [[Sequelize.col("createdAt"), "ASC"]],
-      raw: true
+      order: [
+        [
+          Sequelize.fn(
+            "DATE_TRUNC",
+            "month",
+            Sequelize.col("createdAt")
+          ),
+          "ASC",
+        ],
+      ],
+      raw: true,
     });
 
     res.json(records);
@@ -155,9 +180,3 @@ exports.getMonthlyHistory = async (req, res) => {
     res.status(500).json({ message: "Error fetching monthly data" });
   }
 };
-
-
-
-
-
-
