@@ -1,175 +1,171 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import axios from "axios";
-
 
 export default function Calculator() {
-  const router = useRouter();
+  const [formData, setFormData] = useState({
+    age: "",
+    weight: "",
+    height: "",
+    gender: "male",
+    activityLevel: "moderate",
+  });
 
-  const [age, setAge] = useState("");
-  const [weight, setWeight] = useState("");
-  const [height, setHeight] = useState("");
-  const [gender, setGender] = useState("male");
-  const [activity, setActivity] = useState("sedentary");
-  const [results, setResults] = useState(null);
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const calculateHealth = async () => {
-    if (!age || !weight || !height || !gender || !activity) {
-      alert("Fill all fields");
-      return;
-    }
+  // ================== HANDLE INPUT ==================
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
 
-    const heightMeters = height / 100;
+  // ================== CALCULATIONS ==================
+  const calculateBMI = (weight, height) => {
+    const heightInMeters = height / 100;
+    return (weight / (heightInMeters * heightInMeters)).toFixed(2);
+  };
 
-    const bmi = weight / (heightMeters * heightMeters);
-
-    let category = "";
-    if (bmi < 18.5) category = "Underweight";
-    else if (bmi < 25) category = "Normal weight";
-    else if (bmi < 30) category = "Overweight";
-    else category = "Obese";
-
-    let idealWeight = null;
-    if (category !== "Normal weight") {
-      idealWeight = 21.65 * (heightMeters * heightMeters);
-    }
-
+  const calculateCalories = (age, weight, height, gender, activityLevel) => {
     let bmr;
-    if (gender === "male") bmr = 66.5 + 13.7 * weight + 5 * height - 6.8 * age;
-    else bmr = 665 + 9.6 * weight + 1.8 * height - 4.7 * age;
 
-    const activityMap = {
+    if (gender === "male") {
+      bmr = 10 * weight + 6.25 * height - 5 * age + 5;
+    } else {
+      bmr = 10 * weight + 6.25 * height - 5 * age - 161;
+    }
+
+    const activityMultiplier = {
       sedentary: 1.2,
       light: 1.375,
       moderate: 1.55,
       active: 1.725,
-      very_active: 1.9,
+      veryActive: 1.9,
     };
 
-    const dailyCalories = bmr * activityMap[activity] * 1.1;
+    return Math.round(bmr * activityMultiplier[activityLevel]);
+  };
 
-    const finalData = {
-      height,
-      weight,
-      age,
-      gender,
-      activityLevel: activity,
-      bmi: parseFloat(bmi.toFixed(2)),
-      category,
-      idealBodyWeight: idealWeight
-        ? parseFloat(idealWeight.toFixed(2))
-        : null,
-      dailyCalories: Math.round(dailyCalories),
-    };
-
-    setResults(finalData);
-
-    try {
-      await axios.post(
-        "http://localhost:5000/api/health/bmi",
-        finalData,
-        { withCredentials: true }
-      );
-    } catch (err) {
-      alert("Failed to save results.");
+  const calculateIdealWeight = (height, gender) => {
+    if (gender === "male") {
+      return (50 + 0.9 * (height - 152)).toFixed(1);
+    } else {
+      return (45.5 + 0.9 * (height - 152)).toFixed(1);
     }
   };
 
+  // ================== HANDLE CALCULATE ==================
+  const handleCalculate = async () => {
+    setLoading(true);
+
+    const { age, weight, height, gender, activityLevel } = formData;
+
+    const bmi = calculateBMI(weight, height);
+    const calories = calculateCalories(
+      age,
+      weight,
+      height,
+      gender,
+      activityLevel
+    );
+    const idealWeight = calculateIdealWeight(height, gender);
+
+    const payload = {
+      age: Number(age),
+      weight: Number(weight),
+      height: Number(height),
+      gender,
+      activityLevel,
+      bmi: Number(bmi),
+      dailyCalories: calories,
+      idealWeight: Number(idealWeight),
+    };
+
+    try {
+      const res = await fetch("http://localhost:5000/api/health/bmi", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include", // IMPORTANT for auth
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Failed to save BMI data");
+
+      const data = await res.json();
+      setResult(data);
+      alert("Calculation saved successfully ✅");
+    } catch (error) {
+      console.error("Error saving BMI:", error);
+      alert("Something went wrong.");
+    }
+
+    setLoading(false);
+  };
+
   return (
-    <div className="calc-container">
+    <div style={{ maxWidth: "600px", margin: "0 auto", padding: "40px" }}>
+      <h1>BMI & Nutrition Calculator</h1>
 
-      <h1 className="calc-title">Advanced Health Calculator</h1>
+      <input
+        type="number"
+        name="age"
+        placeholder="Age"
+        value={formData.age}
+        onChange={handleChange}
+      />
 
-      {/* EXPLANATION SECTION */}
-      <div className="info-card">
-        <h2>How It Works (Under The Hood)</h2>
+      <input
+        type="number"
+        name="weight"
+        placeholder="Weight (kg)"
+        value={formData.weight}
+        onChange={handleChange}
+      />
 
-        <p><strong>BMI Formula:</strong> BMI = Weight (kg) ÷ Height² (m²)</p>
+      <input
+        type="number"
+        name="height"
+        placeholder="Height (cm)"
+        value={formData.height}
+        onChange={handleChange}
+      />
 
-        <p><strong>Ideal Body Weight:</strong> 
-          21.65 × Height² (m²) — used when BMI is outside normal range.
-        </p>
+      <select name="gender" value={formData.gender} onChange={handleChange}>
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+      </select>
 
-        <p><strong>BMR (Basal Metabolic Rate):</strong> 
-          Estimated using the Mifflin-St Jeor equation to determine
-          how many calories your body burns at rest.
-        </p>
+      <select
+        name="activityLevel"
+        value={formData.activityLevel}
+        onChange={handleChange}
+      >
+        <option value="sedentary">Sedentary</option>
+        <option value="light">Light</option>
+        <option value="moderate">Moderate</option>
+        <option value="active">Active</option>
+        <option value="veryActive">Very Active</option>
+      </select>
 
-        <p><strong>Daily Calories:</strong> 
-          BMR × Activity Level multiplier to estimate total daily
-          energy needs.
-        </p>
+      <button onClick={handleCalculate} disabled={loading}>
+        {loading ? "Calculating..." : "Calculate"}
+      </button>
 
-        <hr />
-
-        <h3>Why Knowing Your Nutrition Status Matters</h3>
-        <p>
-          Understanding your BMI, energy needs, and nutritional status
-          helps you prevent chronic diseases, manage weight effectively,
-          optimize performance, and maintain long-term health.
-        </p>
-      </div>
-
-      {/* INPUT SECTION */}
-      <div className="form-card">
-
-        <input
-          type="number"
-          placeholder="Age"
-          value={age}
-          onChange={(e) => setAge(e.target.value)}
-        />
-
-        <input
-          type="number"
-          placeholder="Weight (kg)"
-          value={weight}
-          onChange={(e) => setWeight(e.target.value)}
-        />
-
-        <input
-          type="number"
-          placeholder="Height (cm)"
-          value={height}
-          onChange={(e) => setHeight(e.target.value)}
-        />
-
-        <select value={gender} onChange={(e) => setGender(e.target.value)}>
-          <option value="male">Male</option>
-          <option value="female">Female</option>
-        </select>
-
-        <select value={activity} onChange={(e) => setActivity(e.target.value)}>
-          <option value="sedentary">Sedentary</option>
-          <option value="light">Light Activity</option>
-          <option value="moderate">Moderate Activity</option>
-          <option value="active">Very Active</option>
-          <option value="very_active">Super Active</option>
-        </select>
-
-        <button className="calculate-btn" onClick={calculateHealth}>
-          Calculate
-        </button>
-      </div>
-
-      {/* RESULTS */}
-      {results && (
-        <div className="result-card">
-          <h3>BMI: {results.bmi} kg/m²</h3>
-          <h3>Category: {results.category}</h3>
-          <h3>Ideal Body Weight: {results.idealBodyWeight} kg</h3>
-          <h3>Daily Calories: {results.dailyCalories} kcals</h3>
-
-          <button
-            className="progress-btn"
-            onClick={() => router.push("/dashboard")}
-          >
-            View Monthly Progress →
-          </button>
+      {result && (
+        <div style={{ marginTop: "20px" }}>
+          <h3>Results</h3>
+          <p><strong>BMI:</strong> {result.bmi}</p>
+          <p><strong>Daily Calories:</strong> {result.dailyCalories}</p>
+          <p><strong>Ideal Body Weight:</strong> {result.idealWeight} kg</p>
         </div>
       )}
     </div>
   );
 }
+
+
+

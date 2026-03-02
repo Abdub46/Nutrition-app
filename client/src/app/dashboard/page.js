@@ -1,149 +1,205 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import axios from "axios";
-import { Bar } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-} from "chart.js";
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip);
 
 export default function Dashboard() {
-  const router = useRouter();
-  const [monthlyData, setMonthlyData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState(null);
+  const [aiPlan, setAiPlan] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const allMonths = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
+  // ================= FETCH LATEST CALCULATOR DATA =================
   useEffect(() => {
-    const fetchMonthlyData = async () => {
+    const fetchLatestData = async () => {
       try {
-        const res = await axios.get(
-          "http://localhost:5000/api/health/monthly",
-          { withCredentials: true }
+        const res = await fetch(
+          "http://localhost:5000/api/health/latest",
+          { credentials: "include" }
         );
-        setMonthlyData(res.data || []);
+
+        if (!res.ok) throw new Error("Failed to fetch data");
+
+        const data = await res.json();
+        setUserData(data);
+
+
       } catch (error) {
-        if (error.response?.status === 401) router.replace("/login");
-        else console.error("Error fetching monthly data:", error);
-      } finally {
-        setLoading(false);
+        console.error("Error fetching user data:", error);
       }
     };
-    fetchMonthlyData();
-  }, [router]);
 
-  if (loading)
-    return <p style={{ textAlign: "center" }}>Loading dashboard...</p>;
+    fetchLatestData();
+  }, []);
 
-  // Map BMI and calories for all months, default to 0
-  const bmiValues = allMonths.map((month) => {
-    const record = monthlyData.find(r => new Date(r.month).toLocaleString("default", { month: "short" }) === month);
-    return record ? Number(record.avgBMI) : 0;
-  });
+  // ================= GENERATE AI PLAN =================
+  const generateAIPlan = async () => {
+    if (!userData) return;
 
-  const calorieValues = allMonths.map((month) => {
-    const record = monthlyData.find(r => new Date(r.month).toLocaleString("default", { month: "short" }) === month);
-    return record ? Number(record.avgCalories) : 0;
-  });
+    setLoading(true);
+    setAiPlan("");
 
-  // Highlight March
-  const highlightMarch = allMonths.map(m => m === "Mar" ? "rgba(255,99,132,0.8)" : "rgba(0,122,255,0.7)");
-  const highlightMarchCalories = allMonths.map(m => m === "Mar" ? "rgba(255,99,132,0.8)" : "rgba(0,200,255,0.7)");
+    try {
+      const res = await fetch(
+        "http://localhost:5000/api/ai-suggestions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            age: userData.age,
+            weight: userData.weight,
+            height: userData.height,
+            gender: userData.gender,
+            activityLevel: userData.activityLevel,
+            bmi: userData.bmi,
+            category: userData.category,
+            calories: userData.calories,
+            idealBodyWeight: userData.idealBodyWeight || null,
+          }),
+        }
+      );
+
+      if (!res.ok) throw new Error("AI request failed");
+
+      const data = await res.json();
+      setAiPlan(data.result);
+
+
+
+
+              const updated = await fetch(
+          "http://localhost:5000/api/health/latest",
+          { credentials: "include" }
+        );
+        const updatedData = await updated.json();
+        setUserData(updatedData);
+
+
+
+
+
+
+
+
+
+      // Optional: Save plan
+      await fetch("http://localhost:5000/api/ai/save-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          ...userData,
+          aiPlan: data.result,
+        }),
+      });
+
+    } catch (error) {
+      console.error("AI generation error:", error);
+      alert("Failed to generate AI plan.");
+    }
+
+    setLoading(false);
+  };
+
+  const isNormal =
+    userData?.bmi >= 18.5 && userData?.bmi <= 24.9;
 
   return (
-    <div className="dashboard-page" style={{ width: "100%", padding: "1rem", boxSizing: "border-box" }}>
-      <div className="dashboard-container" style={{ maxWidth: "1200px", margin: "0 auto" }}>
-        {/* HEADER */}
-        <div className="dashboard-header">
-          <h1>Horizon Dashboard</h1>
-        </div>
+    <div style={{ padding: "40px", maxWidth: "850px", margin: "0 auto" }}>
+      <h1 style={{ marginBottom: "25px" }}>
+        AI Nutrition Planner
+      </h1>
 
-        {/* IMPORTANCE */}
-        <div className="tracking-info card">
-          <h2>Why Track Your Weight and Nutrition?</h2>
-          <p>
-            Monitoring your BMI, calories, and nutrition status is essential for maintaining a healthy lifestyle. 
-            Regular tracking helps you set goals, detect trends early, and make informed decisions about diet and exercise.
-          </p>
-        </div>
+      {/* ================= USER SUMMARY ================= */}
+      {userData ? (
+        <div
+          style={{
+            background: "#3ebebe",
+            padding: "25px",
+            borderRadius: "10px",
+            marginBottom: "30px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ marginBottom: "15px" }}>
+            Client Health Profile
+          </h3>
 
-        {/* BMI BAR CHART */}
-        <div className="chart-card card">
-          <h2>Average Monthly BMI</h2>
-          <Bar
-            data={{
-              labels: allMonths,
-              datasets: [
-                {
-                  label: "BMI (kg/m²)",
-                  data: bmiValues,
-                  backgroundColor: highlightMarch,
-                  barPercentage: 0.5, // narrower bars
-                  categoryPercentage: 0.5,
-                },
-              ],
-            }}
-            options={{
-              indexAxis: 'x', // vertical bars
-              responsive: true,
-              plugins: { legend: { display: false } }, // remove top legend
-              scales: {
-                y: { title: { display: true, text: "BMI (kg/m²)" }, beginAtZero: true },
-                x: { title: { display: true, text: "Month" } },
-              },
-            }}
-          />
-        </div>
+          {/*<p><strong>Age:</strong> {userData.age}</p>
+          <p><strong>Gender:</strong> {userData.gender}</p>
+          <p><strong>Weight:</strong> {userData.weight} kg</p>
+          <p><strong>Height:</strong> {userData.height} cm</p>*/}
+          <p><strong>BMI:</strong> {userData.bmi} kg/m2</p>
+          <p><strong>Category:</strong> {userData.category}</p>
+          <p><strong>Daily Calories:</strong> {userData.dailyCalories} kcal</p>
+          {/*<p><strong>Activity Level:</strong> {userData.activityLevel}</p>*/}
 
-        {/* CALORIES BAR CHART */}
-        <div className="chart-card card">
-          <h2>Average Monthly Daily Calories</h2>
-          <Bar
-            data={{
-              labels: allMonths,
-              datasets: [
-                {
-                  label: "Calories (kcals)",
-                  data: calorieValues,
-                  backgroundColor: highlightMarchCalories,
-                  barPercentage: 0.5,
-                  categoryPercentage: 0.5,
-                },
-              ],
-            }}
-            options={{
-              indexAxis: 'x',
-              responsive: true,
-              plugins: { legend: { display: false } },
-              scales: {
-                y: { title: { display: true, text: "Calories (kcals)" }, beginAtZero: true },
-                x: { title: { display: true, text: "Month" } },
-              },
-            }}
-          />
+          {!isNormal && userData.idealBodyWeight && (
+            <p>
+              <strong>Ideal Body Weight:</strong>{" "}
+              {userData.idealBodyWeight} kg
+            </p>
+          )}
         </div>
+      ) : (
+        <p>Loading health data...</p>
+      )}
 
-        {/* GENERAL DIETARY ADVICE */}
-        <div className="advice-card card">
-          <h2>General Dietary Counselling</h2>
-          <ul>
-            <li>Maintain a balanced diet.</li>
-            <li>Eat at least 5 servings of fruits and vegetables daily.</li>
-            <li>Reduce sugary drinks and processed foods.</li>
-            <li>Drink 2–3 liters of water daily.</li>
-            <li>Combine good nutrition with regular physical activity.</li>
-          </ul>
-          {monthlyData.length === 0 && <p>No records found.</p>}
-        </div>
-      </div>
+      {/* ================= GENERATE BUTTON ================= */}
+      {userData && (
+        <button
+          onClick={generateAIPlan}
+          style={{
+            padding: "12px 30px",
+            backgroundColor: "#0f172a",
+            color: "#fff",
+            border: "none",
+            borderRadius: "8px",
+            cursor: "pointer",
+            fontWeight: "600",
+          }}
+        >
+          {loading ? "Generating Plan..." : "Generate Nutrition Plan"}
+        </button>
+      )}
+
+      {/* ================= AI OUTPUT ================= */}
+
+
+
+
+      {(aiPlan || userData?.advice) && (
+  <div
+    style={{
+      marginTop: "35px",
+      padding: "25px",
+      background: "#53b7c7",
+      borderRadius: "12px",
+      lineHeight: "1.7",
+    }}
+  >
+    <h3 style={{ marginBottom: "15px" }}>
+      {isNormal
+        ? "Health Maintenance Plan"
+        : "Nutrition Intervention Plan"}
+    </h3>
+
+    <p style={{ whiteSpace: "pre-line" }}>
+      {aiPlan || userData.advice}
+    </p>
+  </div>
+)}
+
+
+
+
+
+
+
+
+
+
     </div>
   );
 }
+
+
