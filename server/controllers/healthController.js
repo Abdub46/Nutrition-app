@@ -1,5 +1,4 @@
 const BMIHistory = require("../models/BMIHistory");
-const Sequelize = require("sequelize");
 
 /* ======================================================
    CALCULATE & SAVE BMI
@@ -43,7 +42,7 @@ exports.calculateAndSaveBMI = async (req, res) => {
       light: 1.375,
       moderate: 1.55,
       active: 1.725,
-      very_active: 1.9,
+      veryactive: 1.9,
     };
 
     const multiplier = activityMap[activityLevel.toLowerCase()];
@@ -51,38 +50,30 @@ exports.calculateAndSaveBMI = async (req, res) => {
       return res.status(400).json({ message: "Invalid activity level" });
     }
 
-    const dailyCalories = bmr * multiplier * 1.1;
+    const dailyCalories = bmr * multiplier;
 
-    /* ---------- Ideal Body Weight ---------- */
+    /* ---------- Ideal Body Weight (ONLY if NOT Normal) ---------- */
     let idealBodyWeight = null;
     if (category !== "Normal weight") {
       idealBodyWeight = 21.65 * (heightInMeters * heightInMeters);
     }
 
-    /* ---------- Advice ---------- */
+    /* ---------- Advice (Maintenance if Normal) ---------- */
     let advice;
-    switch (category) {
-      case "Underweight":
-        advice =
-          "Increase calorie intake with protein-rich foods and healthy fats. Eat small frequent meals.";
-        break;
-      case "Normal weight":
-        advice =
-          "Maintain balanced diet and regular physical activity.";
-        break;
-      case "Overweight":
-        advice =
-          "Reduce calorie intake moderately and increase physical activity.";
-        break;
-      case "Obese":
-        advice =
-          "Adopt structured weight-loss plan. Focus on vegetables, lean proteins and daily exercise.";
-        break;
+    if (category === "Normal weight") {
+      advice = "Maintain balanced diet and regular physical activity to sustain good health.";
+    } else {
+      advice = "Structured nutrition intervention required based on BMI classification.";
     }
 
     /* ---------- Save to DB ---------- */
     const bmiRecord = await BMIHistory.create({
       userId: req.user.id,
+      age: ageNum,
+      weight: weightNum,
+      height: Number(height),
+      gender,
+      activityLevel,
       bmi: parseFloat(bmi.toFixed(2)),
       category,
       bmr: Math.round(bmr),
@@ -104,6 +95,7 @@ exports.calculateAndSaveBMI = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 /* ======================================================
    GET FULL HISTORY
@@ -127,56 +119,30 @@ exports.getHistory = async (req, res) => {
   }
 };
 
+
 /* ======================================================
-   GET MONTHLY AGGREGATED HISTORY
+   GET LATEST RECORD (FOR DASHBOARD)
 ====================================================== */
-exports.getMonthlyHistory = async (req, res) => {
+exports.getLatest = async (req, res) => {
   try {
     if (!req.user || !req.user.id) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const records = await BMIHistory.findAll({
-      attributes: [
-        [
-          Sequelize.fn(
-            "DATE_TRUNC",
-            "month",
-            Sequelize.col("createdAt")
-          ),
-          "month",
-        ],
-        [Sequelize.fn("AVG", Sequelize.col("bmi")), "avgBMI"],
-        [
-          Sequelize.fn("AVG", Sequelize.col("dailyCalories")),
-          "avgCalories",
-        ],
-      ],
+    const latestRecord = await BMIHistory.findOne({
       where: { userId: req.user.id },
-      group: [
-        Sequelize.fn(
-          "DATE_TRUNC",
-          "month",
-          Sequelize.col("createdAt")
-        ),
-      ],
-      order: [
-        [
-          Sequelize.fn(
-            "DATE_TRUNC",
-            "month",
-            Sequelize.col("createdAt")
-          ),
-          "ASC",
-        ],
-      ],
-      raw: true,
+      order: [["createdAt", "DESC"]],
     });
 
-    res.json(records);
+    if (!latestRecord) {
+      return res.status(404).json({ message: "No records found" });
+    }
+
+    res.json(latestRecord);
 
   } catch (error) {
-    console.error("MONTHLY ERROR:", error);
-    res.status(500).json({ message: "Error fetching monthly data" });
+    console.error("LATEST FETCH ERROR:", error);
+    res.status(500).json({ message: "Error fetching latest record" });
   }
 };
+
