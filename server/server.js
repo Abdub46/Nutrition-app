@@ -7,7 +7,8 @@ const morgan = require("morgan");
 const cookieParser = require("cookie-parser");
 
 // Load environment variables
-dotenv.config();
+require("dotenv").config();
+
 
 // ================== DATABASE ==================
 const sequelize = require("./config/database");

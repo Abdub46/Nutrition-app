@@ -2,17 +2,23 @@ const express = require("express");
 const router = express.Router();
 const BMIHistory = require("../models/BMIHistory");
 const authMiddleware = require("../middleware/authMiddleware");
+const OpenAI = require("openai");
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
 
 /* ======================================================
-   GENERATE AI PLAN & UPDATE LATEST RECORD
+   GENERATE DYNAMIC AI PLAN & UPDATE LATEST RECORD
 ====================================================== */
 router.post("/", authMiddleware, async (req, res) => {
   try {
+    // ✅ Check user
     if (!req.user || !req.user.id) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    /* ---------- Find Latest BMI Record ---------- */
+    // ✅ Get latest BMI record
     const latestRecord = await BMIHistory.findOne({
       where: { userId: req.user.id },
       order: [["createdAt", "DESC"]],
@@ -22,66 +28,79 @@ router.post("/", authMiddleware, async (req, res) => {
       return res.status(404).json({ message: "No BMI record found" });
     }
 
-    /* ---------- Generate AI Plan (Simple Logic for Now) ---------- */
-    let aiPlan;
+    // ✅ Extract necessary data
+    const {
+      age,
+      gender,
+      activityLevel,
+      bmi,
+      category,
+      dailyCalories,
+      idealBodyWeight,
+      bmr,
+    } = latestRecord;
 
-    switch (latestRecord.category) {
-      case "Underweight":
-        aiPlan = `
-Increase calorie intake with nutrient-dense foods.
-Include healthy fats, whole grains, and protein-rich meals.
-Eat 5–6 small meals daily.
-Strength training 3–4 times per week.
-        `;
-        break;
+    // ✅ Prepare AI prompt
+    const prompt = `
+You are a licensed clinical nutritionist.
 
-      case "Normal weight":
-        aiPlan = `
-Maintain balanced nutrition.
-Continue moderate physical activity.
-Monitor weight monthly.
-Ensure adequate hydration and sleep.
-        `;
-        break;
+Design a fully personalized nutrition plan based on the client's health profile.
 
-      case "Overweight":
-        aiPlan = `
-Create moderate calorie deficit (~500 kcal/day).
-Increase fiber intake.
-Engage in at least 150 minutes cardio weekly.
-Limit processed foods and sugary drinks.
-        `;
-        break;
+Age: ${age}
+Gender: ${gender}
+BMI: ${bmi.toFixed(1)} (${category})
+BMR: ${bmr} kcal
+Daily Calories: ${dailyCalories.toFixed(0)}
+Activity Level: ${activityLevel}
+Ideal Body Weight: ${idealBodyWeight || "N/A"}
 
-      case "Obese":
-        aiPlan = `
-Structured weight-loss program required.
-Focus on vegetables, lean protein, whole grains.
-Daily physical activity (walking 30–45 mins).
-Consider clinical follow-up if necessary.
-        `;
-        break;
+Provide:
+1. Clinical Nutrition Assessment
+2. Calorie & Macronutrient Breakdown
+3. Personalized Dietary Strategy
+4. Activity-Based Adjustments
+5. Age-Specific Considerations
+6. Sample 7-Day Meal Plan
+7. Monitoring & Follow-Up Plan
 
-      default:
-        aiPlan = "General healthy eating and physical activity recommended.";
-    }
+Tone must be evidence-based and individualized.
+`;
 
-    /* ---------- UPDATE Existing Record ---------- */
-    latestRecord.advice = aiPlan.trim();
-    await latestRecord.save();
-
-    res.json({
-      success: true,
-      message: "AI Nutrition Plan Generated & Saved",
-      record: latestRecord,
+    // ✅ Call OpenAI
+    const aiResponse = await openai.chat.completions.create({
+      model: "minimax/minimax-m2.5",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert clinical nutritionist providing medical-grade dietary planning.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.7,
     });
 
+    const advice = aiResponse.choices[0].message.content;
+
+    // ✅ Update the record with AI advice
+    await latestRecord.update({ advice });
+
+    res.status(200).json({
+  success: true,
+  data: record,
+  warning: advice ? null : "AI advice could not be generated",
+});
   } catch (error) {
     console.error("AI PLAN ERROR:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Failed to generate AI plan" });
   }
 });
 
 module.exports = router;
+
+
 
 

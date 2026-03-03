@@ -4,23 +4,24 @@ const router = express.Router();
 const {
   calculateAndSaveBMI,
   getHistory,
-  getLatest, // ✅ Added missing import
+  getLatest,
 } = require("../controllers/healthController");
 
 const authMiddleware = require("../middleware/authMiddleware");
 
 // ================== ROUTES ==================
 
-// Calculate BMI + Save
+// 1️⃣ Calculate BMI, save to DB, generate AI plan
 router.post("/bmi", authMiddleware, calculateAndSaveBMI);
 
-// Get full history
+// 2️⃣ Get full BMI history
 router.get("/history", authMiddleware, getHistory);
 
-// Get latest record (for dashboard)
+// 3️⃣ Get latest BMI record (for dashboard)
 router.get("/latest", authMiddleware, getLatest);
 
 module.exports = router;
+
 
 
 

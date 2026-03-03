@@ -1,148 +1,163 @@
 const BMIHistory = require("../models/BMIHistory");
+const OpenAI = require("openai");
 
-/* ======================================================
-   CALCULATE & SAVE BMI
-====================================================== */
-exports.calculateAndSaveBMI = async (req, res) => {
+const openai = new OpenAI({
+  apiKey: process.env.OPENROUTER_API_KEY,
+  baseURL: "https://openrouter.ai/api/v1",
+});
+
+
+// ======================
+// 1️⃣ CALCULATE & SAVE BMI + AI
+// ======================
+const calculateAndSaveBMI = async (req, res) => {
   try {
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    console.log("Received BMI payload:", req.body);
+console.log("User:", req.user);
 
-    const { height, weight, age, gender, activityLevel } = req.body;
 
-    if (!height || !weight || !age || !gender || !activityLevel) {
+    const { age, weight, height, gender, activityLevel } = req.body;
+
+    if (!age || !weight || !height || !gender || !activityLevel) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const heightInMeters = Number(height) / 100;
-    const weightNum = Number(weight);
-    const ageNum = Number(age);
+    const heightInMeters = height / 100;
+    const bmi = weight / (heightInMeters * heightInMeters);
 
-    /* ---------- BMI ---------- */
-    const bmi = weightNum / (heightInMeters * heightInMeters);
-
-    let category;
+    let category = "";
     if (bmi < 18.5) category = "Underweight";
-    else if (bmi < 25) category = "Normal weight";
-    else if (bmi < 30) category = "Overweight";
+    else if (bmi < 24.9) category = "Normal weight";
+    else if (bmi < 29.9) category = "Overweight";
     else category = "Obese";
 
-    /* ---------- BMR ---------- */
-    let bmr;
-    if (gender.toLowerCase() === "male") {
-      bmr = 66.5 + 13.7 * weightNum + 5 * Number(height) - 6.8 * ageNum;
-    } else {
-      bmr = 665 + 9.6 * weightNum + 1.8 * Number(height) - 4.7 * ageNum;
-    }
+    const bmr =
+      gender === "male"
+        ? 10 * weight + 6.25 * height - 5 * age + 5
+        : 10 * weight + 6.25 * height - 5 * age - 161;
 
-    /* ---------- Activity Multiplier ---------- */
-    const activityMap = {
+    const activityMultiplier = {
       sedentary: 1.2,
       light: 1.375,
       moderate: 1.55,
       active: 1.725,
-      veryactive: 1.9,
+      veryActive: 1.9, // matches your calculator select
     };
 
-    const multiplier = activityMap[activityLevel.toLowerCase()];
-    if (!multiplier) {
-      return res.status(400).json({ message: "Invalid activity level" });
-    }
+    const multiplier = activityMultiplier[activityLevel];
+    if (!multiplier) return res.status(400).json({ message: "Invalid activity level" });
 
-    const dailyCalories = bmr * multiplier;
+    const dailyCalories = Math.round(bmr * multiplier);
 
-    /* ---------- Ideal Body Weight (ONLY if NOT Normal) ---------- */
-    let idealBodyWeight = null;
-    if (category !== "Normal weight") {
-      idealBodyWeight = 21.65 * (heightInMeters * heightInMeters);
-    }
+    const idealBodyWeight =
+      gender === "male"
+        ? 50 + 0.9 * (height - 152)
+        : 45.5 + 0.9 * (height - 152);
 
-    /* ---------- Advice (Maintenance if Normal) ---------- */
-    let advice;
-    if (category === "Normal weight") {
-      advice = "Maintain balanced diet and regular physical activity to sustain good health.";
-    } else {
-      advice = "Structured nutrition intervention required based on BMI classification.";
-    }
-
-    /* ---------- Save to DB ---------- */
-    const bmiRecord = await BMIHistory.create({
+    // ---------- Save record ----------
+    const newRecord = await BMIHistory.create({
       userId: req.user.id,
-      age: ageNum,
-      weight: weightNum,
-      height: Number(height),
+      age,
+      weight,
+      height,
       gender,
       activityLevel,
       bmi: parseFloat(bmi.toFixed(2)),
       category,
       bmr: Math.round(bmr),
-      dailyCalories: Math.round(dailyCalories),
-      idealBodyWeight: idealBodyWeight
-        ? parseFloat(idealBodyWeight.toFixed(2))
-        : null,
-      advice,
+      dailyCalories,
+      idealBodyWeight: parseFloat(idealBodyWeight.toFixed(1)),
+      advice: null, // will update after AI
     });
 
-    res.status(201).json({
-      success: true,
-      message: "BMI record saved successfully",
-      record: bmiRecord,
-    });
+    // ---------- Generate AI Plan ----------
+    const prompt = `
+You are a professional clinical nutritionist.
+
+Create a personalized nutrition and lifestyle plan for this client:
+
+Age: ${age}
+Gender: ${gender}
+BMI: ${bmi.toFixed(1)} (${category})
+Daily Calories: ${dailyCalories}
+Activity Level: ${activityLevel}
+Ideal Weight: ${idealBodyWeight.toFixed(1)} kg
+
+Provide:
+- Nutrition advice
+- Meal examples
+- Lifestyle recommendations
+- Structured and professional response
+`;
+
+   const aiResponse = await openai.chat.completions.create(
+  {
+    model: "minimax/minimax-m2.5",
+    messages: [{ role: "user", content: prompt }],
+  },
+  {
+    headers: {
+      "HTTP-Referer": "http://localhost:3000", 
+      "X-Title": "Nutrition App",
+    },
+  }
+);
+
+
+
+    const advice = aiResponse.choices[0].message.content;
+
+    await newRecord.update({ advice });
+
+    return res.status(200).json({
+  success: true,
+  data: record,
+  warning: advice ? null : "AI advice could not be generated",
+});
 
   } catch (error) {
-    console.error("SAVE ERROR:", error);
-    res.status(500).json({ message: "Server error" });
+    console.error("CALCULATE ERROR:", error);
+    return res.status(500).json({ message: "Nutrition plan could not be generated" });
   }
 };
 
-
-/* ======================================================
-   GET FULL HISTORY
-====================================================== */
-exports.getHistory = async (req, res) => {
+// ======================
+// 2️⃣ GET FULL HISTORY
+// ======================
+const getHistory = async (req, res) => {
   try {
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
     const records = await BMIHistory.findAll({
       where: { userId: req.user.id },
-      order: [["createdAt", "ASC"]],
+      order: [["createdAt", "DESC"]],
     });
-
     res.json(records);
-
   } catch (error) {
-    console.error("FETCH ERROR:", error);
+    console.error("HISTORY ERROR:", error);
     res.status(500).json({ message: "Error fetching history" });
   }
 };
 
-
-/* ======================================================
-   GET LATEST RECORD (FOR DASHBOARD)
-====================================================== */
-exports.getLatest = async (req, res) => {
+// ======================
+// 3️⃣ GET LATEST RECORD
+// ======================
+const getLatest = async (req, res) => {
   try {
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
     const latestRecord = await BMIHistory.findOne({
       where: { userId: req.user.id },
       order: [["createdAt", "DESC"]],
     });
-
-    if (!latestRecord) {
-      return res.status(404).json({ message: "No records found" });
-    }
-
+    if (!latestRecord) return res.status(404).json({ message: "No record found" });
     res.json(latestRecord);
-
   } catch (error) {
-    console.error("LATEST FETCH ERROR:", error);
+    console.error("LATEST ERROR:", error);
     res.status(500).json({ message: "Error fetching latest record" });
   }
 };
+
+module.exports = {
+  calculateAndSaveBMI,
+  getHistory,
+  getLatest,
+};
+
 
