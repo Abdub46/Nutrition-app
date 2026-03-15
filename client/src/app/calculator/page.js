@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import "./calculator.css";
+
 
 export default function Calculator() {
   const router = useRouter();
@@ -15,11 +17,23 @@ export default function Calculator() {
 
   const [loading, setLoading] = useState(false);
 
+  // ================== SANITIZE INPUT ==================
+  const sanitizeNumber = (value) => {
+    return value.replace(/[^\d.]/g, ""); // remove all except digits and dot
+  };
+
   // ================== HANDLE INPUT ==================
   const handleChange = (e) => {
+    const { name, value } = e.target;
+
+    let sanitizedValue = value;
+    if (["age", "weight", "height"].includes(name)) {
+      sanitizedValue = sanitizeNumber(value);
+    }
+
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: sanitizedValue,
     });
   };
 
@@ -32,8 +46,8 @@ export default function Calculator() {
   const calculateCalories = (age, weight, height, gender, activityLevel) => {
     let bmr =
       gender === "male"
-        ? 10 * weight + 6.25 * height - 5 * age + 5
-        : 10 * weight + 6.25 * height - 5 * age - 161;
+        ? 13.7 * weight + 5 * height - 6.8 * age + 66.5
+        : 9.6 * weight + 1.8 * height - 4.7 * age + 665;
 
     const activityMultiplier = {
       sedentary: 1.2,
@@ -46,11 +60,9 @@ export default function Calculator() {
     return Math.round(bmr * activityMultiplier[activityLevel]);
   };
 
-  const calculateIdealWeight = (height, gender) => {
-    return gender === "male"
-      ? (50 + 0.9 * (height - 152)).toFixed(1)
-      : (45.5 + 0.9 * (height - 152)).toFixed(1);
-  };
+  
+
+  
 
   // ================== HANDLE CALCULATE ==================
   const handleCalculate = async () => {
@@ -74,18 +86,26 @@ export default function Calculator() {
         gender,
         activityLevel
       );
-      const idealBodyWeight = calculateIdealWeight(height, gender);
+      // IDEAL BODY WEIGHT
+     const heightInMeters = height / 100;
+    const idealBodyWeight = (21.7 * (height * height)).toFixed(1);
 
-      const payload = {
-        age: Number(age),
-        weight: Number(weight),
-        height: Number(height),
-        gender,
-        activityLevel,
-        bmi: Number(bmi),
-        dailyCalories,
-        idealBodyWeight: Number(idealBodyWeight),
-      };
+
+    const payload = {
+      weight: Number(weight),
+      height: Number(height),
+      bmi: Number(bmi),
+      idealBodyWeight: Number(idealBodyWeight),
+      dailyCalories: Number(dailyCalories)
+    };
+
+
+
+
+
+
+
+
 
       // ====================== SAVE & GENERATE AI PLAN ======================
       const response = await fetch(
@@ -118,7 +138,7 @@ export default function Calculator() {
       const data = await response.json();
       console.log("BMI & AI plan saved successfully:", data);
 
-      // Redirect seamlessly to dashboard
+      // Redirect seamlessly to dashboard after save
       router.push("/dashboard");
     } catch (error) {
       console.error("Frontend calculation error:", error);
@@ -129,53 +149,77 @@ export default function Calculator() {
   };
 
   return (
-    <div style={{ maxWidth: "600px", margin: "0 auto", padding: "40px" }}>
-      <h1>BMI & Nutrition Calculator</h1>
+    <div className="calculator-wrapper">
+      {/* HEADER */}
 
-      <input
-        type="number"
-        name="age"
-        placeholder="Age"
-        value={formData.age}
-        onChange={handleChange}
-      />
+        <h1>Energy & BMI Calculator</h1>
+     
+       <p> importance is to identify an individual’s nutritional condition and determine the amount of energy needed to maintain proper health and body functions.</p>
+      
 
-      <input
-        type="number"
-        name="weight"
-        placeholder="Weight (kg)"
-        value={formData.weight}
-        onChange={handleChange}
-      />
+      {/* INPUTS SIDE BY SIDE ON LARGE SCREEN, STACKED ON MOBILE */}
+      <div className="calculator-input-grid">
+        <input
+          type="number"
+          name="age"
+          placeholder="Age"
+          value={formData.age}
+          onChange={handleChange}
+          
+        />
 
-      <input
-        type="number"
-        name="height"
-        placeholder="Height (cm)"
-        value={formData.height}
-        onChange={handleChange}
-      />
+        <input
+          type="number"
+          name="weight"
+          placeholder="Weight (kg)"
+          value={formData.weight}
+          onChange={handleChange}
+          
+        />
 
-      <select name="gender" value={formData.gender} onChange={handleChange}>
-        <option value="male">Male</option>
-        <option value="female">Female</option>
-      </select>
+        <input
+          type="number"
+          name="height"
+          placeholder="Height (cm)"
+          value={formData.height}
+          onChange={handleChange}
+          
+        />
 
-      <select
-        name="activityLevel"
-        value={formData.activityLevel}
-        onChange={handleChange}
+        <select
+          name="gender"
+          value={formData.gender}
+          onChange={handleChange}
+          
+        >
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
+
+        <select
+          name="activityLevel"
+          value={formData.activityLevel}
+          onChange={handleChange}
+          
+        >
+          <option value="sedentary">Sedentary</option>
+          <option value="light">Light</option>
+          <option value="moderate">Moderate</option>
+          <option value="active">Active</option>
+          <option value="very_active">Very Active</option>
+        </select>
+      </div>
+
+      {/* CALCULATE BUTTON */}
+      <button
+        onClick={handleCalculate}
+        disabled={loading}
+        className="w-full p-4 bg-blue-600 text-white font-semibold rounded hover:bg-blue-700 transition-colors disabled:opacity-60"
       >
-        <option value="sedentary">Sedentary</option>
-        <option value="light">Light</option>
-        <option value="moderate">Moderate</option>
-        <option value="active">Active</option>
-        <option value="very_active">Very Active</option>
-      </select>
-
-      <button onClick={handleCalculate} disabled={loading}>
         {loading ? "Calculating & Generating Plan..." : "Calculate & Save"}
       </button>
     </div>
   );
 }
+
+
