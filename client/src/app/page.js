@@ -2,8 +2,44 @@
 
 import Link from "next/link";
 import "./globals.css";
+import { FaGithub,FaTwitter,FaWhatsapp } from "react-icons/fa";
+
 
 export default function Home() {
+
+
+    const subscribe = async () => {
+
+const email = document.getElementById("newsletter-email").value;
+const website = document.getElementById("website").value;
+
+const res = await fetch("/api/newsletter",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+email,
+website
+})
+});
+
+if(res.ok){
+alert("Subscribed successfully!");
+}else{
+alert("Something went wrong");
+}
+
+};
+
+
+
+
+
+
+
+
+
   return (
     <div className="home">
 
@@ -105,11 +141,119 @@ export default function Home() {
         </Link>
       </section>
 
-      {/* FOOTER */}
-      <footer className="footer">
-        <p>© {new Date().getFullYear()} Horizon Health App</p>
-        <p>Empowering Better Nutrition & Health Awareness</p>
-      </footer>
+
+
+
+
+            {/* FOOTER */}
+<footer className="footer">
+
+  <div className="footer-grid">
+
+    {/* BRAND */}
+    <div className="footer-brand">
+      <h3>Horizon</h3>
+      <p>
+        Empowering better nutrition awareness through smart
+        health tracking and AI-powered insights.
+      </p>
+    </div>
+
+    {/* QUICK LINKS */}
+    <div className="footer-column">
+      <h4>Quick Links</h4>
+      <Link href="/">Home</Link>
+      <Link href="/dashboard">Dashboard</Link>
+      <Link href="/chatbot">AI Nutrition</Link>
+    </div>
+
+    {/* TOOLS */}
+    <div className="footer-column">
+      <h4>Tools</h4>
+      <Link href="/calculator">BMI Calculator</Link>
+      <Link href="/calculator">Energy Calculator</Link>
+    </div>
+
+    {/* SHOP */}
+    <div className="footer-column">
+      <h4>Shop</h4>
+      <Link href="/shop">Hoodies</Link>
+      <Link href="/shop">T-Shirts</Link>
+      <Link href="/shop">Beanies</Link>
+      <Link href="/shop">Tote Bags</Link>
+    </div>
+
+
+
+
+    
+
+
+
+
+
+
+
+
+    {/* NEWSLETTER */}
+    <div className="footer-column">
+      <h4>Stay Updated</h4>
+      <p>Get nutrition tips & Horizon updates.</p>
+
+      <div className="newsletter">
+        <input id="newsletter-email" type="email" placeholder="example@gmail.com"/>
+
+              {/* BOT TRAP */}
+      <input
+      type="text"
+      id="website"
+      style={{display:"none"}}
+      />
+
+
+
+
+        <button onClick={subscribe}>Subscribe</button>
+
+      </div>
+
+
+      <div className="social-icons">
+
+      <a href="https://github.com/Abdub46">
+      <FaGithub/>
+      </a>
+
+      <a href="https://twitter.com/Abdub134">
+      <FaTwitter/>
+      </a>
+
+      <a href="https://wa.me/254719644609">
+      <FaWhatsapp/>
+      </a>
+
+      </div>
+
+
+
+
+    </div>
+
+  </div>
+
+  <div className="footer-bottom">
+    <p>© {new Date().getFullYear()} Horizon Health App</p>
+  </div>
+
+</footer>
+
+
+
+
+
+
+
+
 
     </div>
   );

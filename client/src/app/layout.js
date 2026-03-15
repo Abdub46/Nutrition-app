@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
 import "./globals.css";
+import { CartProvider } from "./context/CartContext";
+
 
 export default function RootLayout({ children }) {
 
@@ -58,6 +60,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
+        <CartProvider>
 
         <nav className="navbar" ref={navRef}>
 
@@ -164,6 +167,8 @@ export default function RootLayout({ children }) {
         </nav>
 
         <main>{children}</main>
+
+        </CartProvider>
 
       </body>
     </html>
