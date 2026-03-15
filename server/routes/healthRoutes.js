@@ -20,6 +20,9 @@ router.get("/history", authMiddleware, getHistory);
 // 3️⃣ Get latest BMI record (for dashboard)
 router.get("/latest", authMiddleware, getLatest);
 
+
+
+
 module.exports = router;
 
 

@@ -21,7 +21,7 @@ const BMIHistory = require("./models/BMIHistory");
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const healthRoutes = require("./routes/healthRoutes");
-const aiRoute = require("./routes/aiSuggestions"); // AI Nutrition routes
+
 
 // ================== APP INIT ==================
 const app = express();
@@ -43,7 +43,7 @@ app.use(cookieParser());
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/health", healthRoutes);
-app.use("/api/ai-suggestions", aiRoute);
+
 
 // ================== DATABASE CONNECTION ==================
 sequelize
